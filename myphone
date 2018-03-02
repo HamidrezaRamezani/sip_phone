@@ -110,10 +110,10 @@ try:
     lib.init(log_cfg = pj.LogConfig(level=4, callback=log_cb))
     lib.create_transport(pj.TransportType.UDP, pj.TransportConfig(5062))
     lib.start()
-    sip_server = "192.168.88.222"
-    sip_user = "10000"
-    sip_pass = "10000"
-    sip_display_name = "10000"
+    sip_server = "sip server address"
+    sip_user = "sip user name"
+    sip_pass = "sip authentication password"
+    sip_display_name = "sip display name"
     sip_registrar = ""
     sip_proxy = ""
     acc = lib.create_account(pj.AccountConfig(sip_server , sip_user , sip_pass, sip_display_name, sip_registrar, sip_proxy))
