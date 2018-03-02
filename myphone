@@ -1,0 +1,211 @@
+#!/bin/python
+import sys
+import pjsua as pj
+import threading
+#import Tkinter
+#import tkMessageBox 
+
+
+# here is some global varibales, I will use them in program.
+LOG_LEVEL=3
+current_call = None
+
+
+################################## Logging callback ####################################
+# This is a function defined in pjsua python package
+def log_cb(level, str, len):
+    print str,
+################################## Account callbacks ###################################
+
+class MyAccountCallback(pj.AccountCallback):
+    sem = None
+
+    def __init__(self, account):
+        pj.AccountCallback.__init__(self, account)
+
+    def wait(self):
+        self.sem = threading.Semaphore(0)
+        self.sem.acquire()
+
+    def on_reg_state(self):
+        if self.sem:
+            if self.account.info().reg_status >= 200:
+                self.sem.release()
+
+    def on_incoming_call(self, call):
+        global current_call 
+        if current_call:
+            call.answer(486, "Busy")
+            return
+            
+        print "Incoming call from ", call.info().remote_uri
+        print "Press 'a' to answer"
+
+        current_call = call
+
+        call_cb = MyCallCallback(current_call)
+        current_call.set_callback(call_cb)
+        
+        current_call.answer(180)
+        incoming_banner ="""
+ _____                           _                _____      _ _ 
+|_   _|                         (_)              / ____|    | | |
+  | |  _ __   ___ ___  _ __ ___  _ _ __   __ _  | |     __ _| | |
+  | | | '_ \ / __/ _ \| '_ ` _ \| | '_ \ / _` | | |    / _` | | |
+ _| |_| | | | (_| (_) | | | | | | | | | | (_| | | |___| (_| | | |
+|_____|_| |_|\___\___/|_| |_| |_|_|_| |_|\__, |  \_____\__,_|_|_|
+                                          __/ |                  
+                                         |___/                   
+"""
+        print incoming_banner
+        print "Press 'a' to answer"
+        #tkMessageBox.showinfo("Incoming call", "There is an incoming call")
+       
+
+##################### Call Callback to receive events from Call #########################
+
+class MyCallCallback(pj.CallCallback):
+
+    def __init__(self, call=None):
+        pj.CallCallback.__init__(self, call)
+
+    # Notification when call state has changed
+    def on_state(self):
+        global current_call
+        print "Call with", self.call.info().remote_uri,
+        print "is", self.call.info().state_text,
+        print "last code =", self.call.info().last_code, 
+        print "(" + self.call.info().last_reason + ")"
+        
+        if self.call.info().state == pj.CallState.DISCONNECTED:
+            current_call = None
+            print 'Current call is', current_call
+
+    # Notification when call's media state has changed.
+    def on_media_state(self):
+        if self.call.info().media_state == pj.MediaState.ACTIVE:
+            # Connect the call to sound device
+            call_slot = self.call.info().conf_slot
+            pj.Lib.instance().conf_connect(call_slot, 0)
+            pj.Lib.instance().conf_connect(0, call_slot)
+            print "Media is now active"
+        else:
+            print "Media is inactive"
+
+####################################################################################
+
+def make_call(uri):
+    try:
+        print "Making call to", uri
+        return acc.make_call(uri, cb=MyCallCallback())
+    except pj.Error, e:
+        print "Exception: " + str(e)
+        return None
+
+lib = pj.Lib()
+
+####################################################################################
+
+try:
+    lib.init(log_cfg = pj.LogConfig(level=4, callback=log_cb))
+    lib.create_transport(pj.TransportType.UDP, pj.TransportConfig(5062))
+    lib.start()
+    sip_server = "192.168.88.222"
+    sip_user = "10000"
+    sip_pass = "10000"
+    sip_display_name = "10000"
+    sip_registrar = ""
+    sip_proxy = ""
+    acc = lib.create_account(pj.AccountConfig(sip_server , sip_user , sip_pass, sip_display_name, sip_registrar, sip_proxy))
+    #acc2 = lib.create_account(pj.AccountConfig("192.168.1.102", "100", "100"))
+    
+    acc_cb = MyAccountCallback(acc)
+    acc.set_callback(acc_cb)
+    acc_cb.wait()
+    print "\n"
+    print "Registration complete, status=", acc.info().reg_status, \
+          "(" + acc.info().reg_reason + ")"
+
+    #acc2_cb = MyAccountCallback(acc2)
+    #acc2.set_callback(acc2_cb)
+    #acc2_cb.wait()
+    #print "\n"
+    #print "Registration complete, status=", acc2.info().reg_status, \
+     #     "(" + acc2.info().reg_reason + ")"
+
+
+##############################################################################
+
+    while True:
+        print "+=============================================================================+"
+        a =  """
+ _    _ _____  _____        _____ _____ _____    _____  _                                    
+| |  | |  __ \|  __ \      / ____|_   _|  __ \  |  __ \| |                                   
+| |__| | |__) | |__) |____| (___   | | | |__) | | |__) | |__   ___  _ __   ___               
+|  __  |  _  /|  _  /______\___ \  | | |  ___/  |  ___/| '_ \ / _ \| '_ \ / _ \               
+| |  | | | \ \| | \ \      ____) |_| |_| |      | |    | | | | (_) | | | |  __/              
+|_|  |_|_|  \_\_|  \_\    |_____/|_____|_|      |_|    |_| |_|\___/|_| |_|\___|              
+                                                                                                                                                        
+"""
+        print a
+        print "+=============================================================================+"
+        print "|  Menu:  m=make-call | d=Send_DTMF | h=hangup-call | a=answer-call | q=quit  |"
+        print "|                       o=hOld_Call | r=Resume_Hold_call                      |"
+        print "+=============================================================================+"
+        input = sys.stdin.readline().rstrip("\r\n")
+        if input == "m":
+            if current_call:
+                print "Already have another call"
+                continue
+            print "Enter a Number >", 
+            input = sys.stdin.readline().rstrip("\r\n")
+            if input == "":
+                continue
+            lck = lib.auto_lock()
+            input = "sip:"+input+"@"+sip_server
+            current_call = make_call(input)
+            del lck
+        
+        elif input == "d":
+              if current_call:
+                 print "Enter DTMF --> ",
+                 dtmf_input = sys.stdin.readline().rstrip("\r\n")
+                 current_call.dial_dtmf(dtmf_input)
+              print "There is no active call"
+
+        elif input == "o":
+              if current_call:
+                 current_call.hold()
+              print "There is no active call"
+
+        elif input == "r":
+             if current_call:
+                current_call.unhold()
+             print "There is no active call"
+
+        elif input == "h":
+            if not current_call:
+                print "There is no call"
+                continue
+            current_call.hangup()
+
+        elif input == "a":
+            if not current_call:
+                print "There is no call"
+                continue
+            current_call.answer(200)
+        elif input == "q":
+            break
+
+    # Shutdown the library
+    transport = None
+    acc.delete()
+    acc = None
+    lib.destroy()
+    lib = None
+
+except pj.Error, e:
+    print "Exception: " + str(e)
+    lib.destroy()
+    lib = None
+#######################################################################
