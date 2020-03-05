@@ -10,7 +10,7 @@ import threading
 LOG_LEVEL=3
 current_call = None
 
-
+### this is a test
 ################################## Logging callback ####################################
 # This is a function defined in pjsua python package
 def log_cb(level, str, len):
